@@ -1,60 +1,115 @@
 # dsh-remote-automation
 
-在 DSH 侧栏新增「云端任务」页面：任务可以跑在远程服务器上（当前支持阿里云 ECS），与本地「自动化任务」并存，一键切换，默认云端。
+[English](README.md) | [简体中文](README.zh.md)
 
-## 特性
+[![CI](https://github.com/knight8818/dsh-remote-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/knight8818/dsh-remote-automation/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
 
-- **独立入口**：侧栏「自动化任务」下方新增「云端任务」，不挤占官方页面。
-- **每次先问**：创建自动化任务时先弹问题——云端服务器，还是本地 DSH 提醒；不预设立场、没有默认值。
-- **真实状态**：运行中 / 空闲 / 成功 / 失败、上次退出码、最近日志时间，打开即刷新、每 8 秒轮询、可手动刷新。
-- **零入站**：只走云助手 API（出站 HTTPS），安全组不需要任何入站规则。
-- **无密钥入库**：所有凭证来自环境变量或本地配置文件，仓库里没有任何默认值。
+**Run scheduled automation on a remote Aliyun ECS from DeepSeek Harness.**
 
-## 安装
+A DSH bundle that adds a **Cloud Tasks** sidebar page and a small set of agent tools. Scripts run on your own ECS instance through Aliyun Cloud Assistant, so the instance needs **zero inbound ports** and keeps its security group closed. The local machine can be off.
 
-```bash
-# 1. 放进 DSH profile 的 node_modules
-cp -r dsh-remote-automation ~/.dsh/profiles/node_modules/
+> Status: Aliyun ECS is the only provider today. The `tasks` / `aliyun` module boundary is designed so another provider can be added without touching the UI.
 
-# 2. 在 profile 的 cordis.patch.yml 末尾追加
-# - insert:
-#     - id: remote-automation
-#       name: dsh-remote-automation
+## Features
 
-# 3. 完全退出并重启 DSH
-```
+- **Dedicated page**, not a hijacked built-in view: a `Cloud Tasks` entry under the sidebar, with live status, run now, logs and delete.
+- **Asks every time**: creating an automation through `automation_create` always asks *cloud server* or *local DSH reminder* first. No default target.
+- **Real status**, not a guess: running / idle / success / failed, last exit code, last log time, refreshed on open and while visible.
+- **Zero inbound**: only outbound HTTPS to `ecs.<region>.aliyuncs.com` through Cloud Assistant. No SSH, no open ports.
+- **Secrets stay local**: nothing is bundled in this repo; credentials come from the page or environment variables, and the API only ever returns a masked AccessKey ID.
+- **Agent-friendly**: ships [`AGENTS.md`](AGENTS.md), so a DeepSeek agent that reads the repo knows exactly how to install, verify, upgrade and uninstall it.
 
-## 配置
+## Requirements
 
-打开侧栏「云端任务」，页面里是服务商行（阿里云 ECS + 状态点），点 **编辑** 展开：
-
-- AccessKey ID / Secret 已保存时输入框留空，占位符显示「留空使用已保存凭据」；
-- 保存后表单收起，只保留 `region · 实例 ID`；
-- 右上角 **配置指南** 打开两栏说明：左栏是创建 RAM 用户 / 建策略 / 授权的步骤，右栏是可直接复制的 5 个动作的最小权限策略；
-- 出现 `Forbidden.RAM` 等错误时，卡片会给出「重新配置」入口。
-
-字段：
-
-| 字段 | 说明 |
+| Requirement | Notes |
 | --- | --- |
-| AccessKey ID / Secret | RAM 子账号，建议只授 ECS 的 5 个动作（见下） |
-| 地域 | 例如 `cn-shenzhen` |
-| 实例 ID | 例如 `i-xxxxxxxx` |
-| 脚本目录 | 默认 `/opt/automation` |
+| DeepSeek Harness | `>= 0.2.0` (bundle patch + client plugin support) |
+| Node.js | `>= 20` (host side uses only the standard library; zero runtime dependencies) |
+| Aliyun ECS | An instance with Cloud Assistant online (public images include it) |
+| Network | The instance can reach `ecs.<region>.aliyuncs.com:443` outbound |
+| Git | Only for installing straight from GitHub |
 
-也可以走环境变量（优先级高于配置文件）：
+## Installation
 
-```bash
-DSH_RA_AK_ID=...
-DSH_RA_AK_SECRET=...
-DSH_RA_REGION=cn-shenzhen
-DSH_RA_INSTANCE_ID=i-xxxxxxxx
-DSH_RA_SERVER_DIR=/opt/automation   # 可选
+### 1. Let your DeepSeek install it (recommended)
+
+Paste this to the agent in DSH, together with the repository URL:
+
+```text
+Install the DSH plugin from https://github.com/knight8818/dsh-remote-automation.
+Follow the repository's AGENTS.md: install it into my desktop profile, verify the
+YAML layer and node --check, do not print any file under ~/.dsh/remote-automation,
+and do not restart DSH — tell me when I should fully quit and relaunch it.
 ```
 
-配置文件位置：`$DSH_HOME/remote-automation/config.json`（默认 `~/.dsh/...`）。
+The agent reads [`AGENTS.md`](AGENTS.md), which contains the exact `dsh plugin` command, the manual fallback, verification steps and the safety rules.
 
-### RAM 最小权限
+### 2. One command
+
+Install the `dsh` CLI once (or use `npx` for a one-shot):
+
+```bash
+npm install -g @deepseek-ai/dsh
+dsh plugin --profile desktop add github:knight8818/dsh-remote-automation
+```
+
+The desktop app profile is usually `desktop`; `dsh web` uses `web`. If your profile has another name, use it. On first use `dsh plugin` initializes a missing profile.
+
+Without a global install:
+
+```bash
+npx --yes @deepseek-ai/dsh@latest plugin --profile desktop add github:knight8818/dsh-remote-automation
+```
+
+The command adds the package to the profile and appends its bundle layer automatically, because the package declares `dsh.bundle.patch`. No YAML editing, no copying files.
+
+Verify the layer without booting:
+
+```bash
+dsh --profile desktop --dump-config | grep dsh-remote-automation
+```
+
+(PowerShell: `dsh --profile desktop --dump-config | Select-String dsh-remote-automation`.)
+
+### 3. Manual fallback (offline / no pnpm)
+
+```bash
+git clone https://github.com/knight8818/dsh-remote-automation
+cp -r dsh-remote-automation ~/.dsh/profiles/node_modules/
+```
+
+Then append to `~/.dsh/profiles/desktop/cordis.patch.yml` — only if an entry with `id: remote-automation` is not already present:
+
+```yaml
+- insert:
+    - id: remote-automation
+      name: dsh-remote-automation
+```
+
+On Windows the paths are `%USERPROFILE%\.dsh\profiles\node_modules\` and `%USERPROFILE%\.dsh\profiles\desktop\cordis.patch.yml`.
+
+After either method, **fully quit DSH** (tray icon included, not just the window) and start it again. A window reload is not enough for the host part.
+
+## Configure
+
+Open **Cloud Tasks** in the sidebar, click **Edit**, and fill in:
+
+| Field | Description |
+| --- | --- |
+| AccessKey ID / Secret | A RAM user, ideally scoped to the five actions below |
+| Region | e.g. `cn-shenzhen` |
+| Instance ID | e.g. `i-xxxxxxxxxxxxxxxx` |
+| Script directory | default `/opt/automation` |
+
+Saved secrets are never sent back to the page; the field shows a placeholder and stays blank. Saving with a blank secret keeps the stored one.
+
+Environment variables override the file (`DSH_RA_AK_ID`, `DSH_RA_AK_SECRET`, `DSH_RA_REGION`, `DSH_RA_INSTANCE_ID`, `DSH_RA_SERVER_DIR`). The config file lives at `$DSH_HOME/remote-automation/config.json` (default `~/.dsh/remote-automation/config.json`) and is written with mode `0600` where the platform supports it.
+
+### RAM policy (least privilege)
+
+Create a custom policy with exactly these actions and attach it to the RAM user:
 
 ```json
 {
@@ -75,48 +130,81 @@ DSH_RA_SERVER_DIR=/opt/automation   # 可选
 }
 ```
 
-## 使用
+It cannot delete instances, change security groups, disks or networks.
 
-在对话里说「每天 9 点跑 daily-report」，模型会调用 `automation_create`，此时会先弹出问题让你选：**云端服务器** 还是 **本地 DSH 提醒**。选云端才会在服务器上生成脚本与 cron；选本地则转去创建 `schedule_*` 提醒。
+## Usage
 
-工具：
+Say something like:
 
-| 工具 | 作用 |
-| --- | --- |
-| `automation_create` | 创建自动化任务的唯一入口，先询问云端/本地 |
-| `cloud_task_list` | 列出云端任务与实时状态 |
-| `cloud_task_run` | 立即触发 |
-| `cloud_task_delete` | 删除任务并清理服务器文件 |
-| `cloud_task_logs` | 查看日志 |
-
-## 要求
-
-- DSH Web（含 Electron 桌面端），客户端插件机制可用。
-- Node.js >= 20（宿主侧只用标准库）。
-- 目标实例已安装并运行云助手 agent（阿里云公共镜像默认有）。
-- 实例能出站访问 `ecs.<region>.aliyuncs.com:443`。
-
-## 安全
-
-- 安全组零入站；所有操作通过云助手通道完成。
-- 页面接口要求每个进程随机生成的令牌（通过 index 注入下发，仅已登录页面可见）。
-- AccessKey 只保存在本地配置文件 / 环境变量，不会写入日志或返回给页面（页面只看到掩码）。
-
-## 限制
-
-- 目前只有阿里云 ECS 一个 provider；`lib/aliyun.js` 与 `lib/tasks.js` 的边界已按可替换设计。
-- 云端任务的状态查询是一次远程命令（约 2 秒），任务很多时会变慢。
-
-## 开发
-
-```bash
-npm test          # node:test
-node --check lib/host.js
-node --check lib/client.js
+```text
+Every day at 09:00, run my daily-report script on the cloud server.
 ```
 
-`lib/client.js` 是手写产物，不是构建输出；格式为 `window.__ModuleLoader__.load({ id, factory })`，与 DSH 客户端模块系统一致。
+`automation_create` asks **cloud** or **local** first. Cloud writes a script and an optional cron entry on the server; local hands off to `schedule_*` so DSH reminds you in-session.
+
+Tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `automation_create` | The only creation entry point; asks cloud vs local first |
+| `cloud_task_list` | List tasks with live status (one Cloud Assistant query) |
+| `cloud_task_run` | Trigger a task now |
+| `cloud_task_logs` | Tail the task log |
+| `cloud_task_delete` | Remove script, cron entry and log |
+
+## Security model
+
+- **No secrets in the repo or in git history.** Configuration is read from the environment or a local file written at runtime.
+- The local HTTP surface (`/dsh-remote-automation/*`) requires a per-process random token injected only into the authenticated page; comparison is constant-time.
+- The page receives a masked AccessKey ID only. The secret is never returned, logged or rendered.
+- Commands run through Cloud Assistant; there is no inbound listener on the instance.
+- Task state (`state.json`) stores the commands you asked to run, so treat it like shell history; it is written `0600`.
+- The plugin sends no telemetry.
+
+See [`SECURITY.md`](SECURITY.md) for reporting a vulnerability.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `dsh: command not found` | Use the `npx` form, or `npm install -g @deepseek-ai/dsh` |
+| Sidebar entry does not appear | Fully quit DSH including the tray process, then relaunch |
+| "Plugin is not configured" | Fill the page, or set the `DSH_RA_*` variables |
+| `Forbidden.RAM` | Attach the policy above to the RAM user |
+| Cloud Assistant offline | Start/install the Cloud Assistant agent on the instance |
+| `id: remote-automation` appears twice | You installed both the bundle and the manual patch — remove one |
+| Logs are empty right after "Run" | The process just started; refresh in a few seconds |
+
+## Uninstall
+
+```bash
+dsh plugin --profile desktop remove dsh-remote-automation
+```
+
+For a manual install, delete `~/.dsh/profiles/node_modules/dsh-remote-automation` and remove the three-line `- insert:` block from the profile's `cordis.patch.yml`. Your credentials in `~/.dsh/remote-automation/` are kept; delete that folder yourself if you want them gone.
+
+## Development
+
+```bash
+npm install          # dev dependency: yaml, for tests only
+npm run check        # node --check on every runtime file
+npm test             # node:test
+```
+
+Layout:
+
+```
+lib/host.js      host plugin: tools + HTTP routes + page token
+lib/client.js    browser plugin: sidebar page (prebuilt, lazy-CJS module format)
+lib/tasks.js     task model + remote script/cron/log operations
+lib/aliyun.js    ECS Cloud Assistant RPC client (HMAC-SHA1, zero deps)
+lib/config.js    config resolution + masking
+lib/validate.js  input validation shared by config, tasks and HTTP
+cordis.patch.yml bundle layer (inserts the plugin row)
+```
+
+`lib/client.js` is a hand-written artifact in the DSH client module format (`window.__ModuleLoader__.load`), not a build output. There are no runtime dependencies, so an installed copy does not need `npm install`.
 
 ## License
 
-MIT
+[MIT](LICENSE)

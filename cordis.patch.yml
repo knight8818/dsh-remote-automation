@@ -1,0 +1,6 @@
+# dsh-remote-automation bundle layer.
+# Applied automatically when a profile lists this package in
+# `dsh.profile.bundles` (see README: Installation).
+- insert:
+    - id: remote-automation
+      name: dsh-remote-automation
