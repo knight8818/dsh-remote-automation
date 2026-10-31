@@ -85,12 +85,12 @@ node --check <install-dir>/lib/client.js
 For a CLI/bundle install, verify the effective composition without booting a server:
 
 ```bash
-dsh --profile <name> --dump-config | grep -c 'dsh-remote-automation'
+dsh --profile <name> --dump-config | grep -c 'name: dsh-remote-automation'
 ```
 
-Expect `1` (the layer header plus its row are counted once). Do not print the whole dumped
-config if it may contain other users' settings; grep only. PowerShell:
-`dsh --profile <name> --dump-config | Select-String dsh-remote-automation`.
+Expect `1` (the layer header also mentions the name, so count only the row's `name:` line).
+Do not print the whole dumped config if it may contain other users' settings; grep only.
+PowerShell: `dsh --profile <name> --dump-config | Select-String 'name: dsh-remote-automation'`.
 
 For a manual install, read the profile's `cordis.patch.yml` and confirm exactly one
 `id: remote-automation` and one `name: dsh-remote-automation`; the bundled

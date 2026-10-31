@@ -106,6 +106,12 @@ On Windows the paths are `%USERPROFILE%\.dsh\profiles\node_modules\` and `%USERP
 
 After either method, **fully quit DSH** (tray icon included, not just the window) and start it again. A window reload is not enough for the host part.
 
+### Upgrading from a manual `0.1.x` install
+
+Remove the old copy (`~/.dsh/profiles/node_modules/dsh-remote-automation`) and the three-line
+`- insert:` block from the profile's `cordis.patch.yml` first, then use the one-command
+install above. Keeping both registers `id: remote-automation` twice.
+
 ## Configure
 
 Open **Cloud Tasks** in the sidebar, click **Edit**, and fill in:

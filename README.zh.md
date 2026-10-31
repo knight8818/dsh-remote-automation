@@ -104,6 +104,12 @@ Windows 下路径是 `%USERPROFILE%\.dsh\profiles\node_modules\` 和 `%USERPROFI
 
 无论用哪种方式，装完都要**完全退出 DSH**（托盘图标也要退出，不是只关窗口）再启动。只刷新页面不够，宿主插件需要重启才会挂载。
 
+### 从手动安装的 `0.1.x` 升级
+
+先删掉旧副本（`~/.dsh/profiles/node_modules/dsh-remote-automation`）和 profile 的
+`cordis.patch.yml` 里那段三行 `- insert:`，再用上面的一条命令安装。两套都留着会让
+`id: remote-automation` 注册两次。
+
 ## 配置
 
 打开侧栏「云端任务」，点「编辑」，填写：
