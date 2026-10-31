@@ -1,5 +1,7 @@
 # dsh-remote-automation
 
+<img src="https://raw.githubusercontent.com/knight8818/dsh-remote-automation/main/assets/icon.png" width="88" align="right" alt="dsh-remote-automation icon">
+
 English | [简体中文](README.md)
 
 [![CI](https://github.com/knight8818/dsh-remote-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/knight8818/dsh-remote-automation/actions/workflows/ci.yml)

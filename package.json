@@ -1,7 +1,7 @@
 {
   "name": "dsh-remote-automation",
   "version": "0.2.0",
-  "description": "Run scheduled automation on a remote Aliyun ECS from DeepSeek Harness: zero-inbound Cloud Assistant execution, a dedicated cloud-tasks sidebar page, and automation_* agent tools.",
+  "description": "A DeepSeek Harness (DSH) plugin that runs scheduled shell automation on a remote Aliyun ECS through Cloud Assistant, with a Cloud Tasks sidebar page and agent tools.",
   "type": "module",
   "main": "lib/host.js",
   "exports": {
@@ -28,9 +28,13 @@
     "cron",
     "remote",
     "cloud",
+    "cloud-tasks",
+    "scheduled-tasks",
     "aliyun",
+    "aliyun-ecs",
     "ecs",
-    "cloud-assistant"
+    "cloud-assistant",
+    "deepseek"
   ],
   "license": "MIT",
   "author": "dsh-remote-automation contributors",
