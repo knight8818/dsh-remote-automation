@@ -1,0 +1,38 @@
+{
+  "name": "dsh-remote-automation",
+  "version": "0.1.0",
+  "description": "在 DSH 的「自动化任务」页面里增加云端执行：任务跑在远程服务器（当前支持阿里云 ECS），本地与云端一键切换。",
+  "type": "module",
+  "main": "lib/host.js",
+  "exports": {
+    ".": "./lib/host.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "automation",
+    "remote",
+    "aliyun",
+    "ecs"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  }
+}
