@@ -31,6 +31,8 @@
 | 网络 | 实例能出站访问 `ecs.<region>.aliyuncs.com:443` |
 | Git | 仅「从 GitHub 直接安装」时需要 |
 
+插件需要 **Web profile**（桌面版或 `dsh web`）：它要在 `webServer` 服务上注册侧栏页面和 HTTP 路由。headless / SDK profile 没有这个服务，插件不会加载。
+
 ## 安装
 
 ### 1. 让你的 DeepSeek 安装（推荐）
@@ -75,7 +77,19 @@ dsh --profile desktop --dump-config | grep dsh-remote-automation
 
 ```bash
 git clone https://github.com/knight8818/dsh-remote-automation
-cp -r dsh-remote-automation ~/.dsh/profiles/node_modules/
+# 目标已存在就停下，不要在它里面再套一层
+test -e ~/.dsh/profiles/node_modules/dsh-remote-automation \
+  && echo "already installed: remove or back it up first" \
+  || cp -r dsh-remote-automation ~/.dsh/profiles/node_modules/dsh-remote-automation
+```
+
+Windows PowerShell：
+
+```powershell
+git clone https://github.com/knight8818/dsh-remote-automation
+$dst = "$env:USERPROFILE\.dsh\profiles\node_modules\dsh-remote-automation"
+if (Test-Path $dst) { throw "already installed: $dst" }
+Copy-Item -Recurse .\dsh-remote-automation $dst
 ```
 
 然后在 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾追加（仅当文件里还没有 `id: remote-automation` 时）：

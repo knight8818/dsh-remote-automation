@@ -31,6 +31,8 @@ A DSH bundle that adds a **Cloud Tasks** sidebar page and a small set of agent t
 | Network | The instance can reach `ecs.<region>.aliyuncs.com:443` outbound |
 | Git | Only for installing straight from GitHub |
 
+The plugin needs a **Web profile** (the desktop app or `dsh web`): it registers a sidebar page and an HTTP route on the `webServer` service. Headless/SDK profiles do not compose that service and will not load it.
+
 ## Installation
 
 ### 1. Let your DeepSeek install it (recommended)
@@ -77,7 +79,19 @@ dsh --profile desktop --dump-config | grep dsh-remote-automation
 
 ```bash
 git clone https://github.com/knight8818/dsh-remote-automation
-cp -r dsh-remote-automation ~/.dsh/profiles/node_modules/
+# stop if the target already exists — do not nest a second copy inside it
+test -e ~/.dsh/profiles/node_modules/dsh-remote-automation \
+  && echo "already installed: remove or back it up first" \
+  || cp -r dsh-remote-automation ~/.dsh/profiles/node_modules/dsh-remote-automation
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/knight8818/dsh-remote-automation
+$dst = "$env:USERPROFILE\.dsh\profiles\node_modules\dsh-remote-automation"
+if (Test-Path $dst) { throw "already installed: $dst" }
+Copy-Item -Recurse .\dsh-remote-automation $dst
 ```
 
 Then append to `~/.dsh/profiles/desktop/cordis.patch.yml` — only if an entry with `id: remote-automation` is not already present:

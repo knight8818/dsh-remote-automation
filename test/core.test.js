@@ -35,6 +35,8 @@ test('validCron rejects malformed or out-of-range expressions', () => {
   assert.equal(validCron('0 9 * * 8'), false)
   assert.equal(validCron('*/0 * * * *'), false)
   assert.equal(validCron('5-1 * * * *'), false)
+  assert.equal(validCron('0 9\n* * *'), false)
+  assert.equal(validCron('0 9 * * *\rrm -rf /'), false)
   assert.equal(validCron(''), false)
   assert.equal(validCron(null), false)
 })
@@ -53,12 +55,16 @@ test('validRegion accepts Aliyun regions and rejects URL tricks', () => {
   assert.equal(validRegion(''), false)
 })
 
-test('validServerDir rejects traversal and shell metacharacters', () => {
+test('validServerDir rejects traversal, root and shell metacharacters', () => {
   assert.equal(validServerDir('/opt/automation'), true)
+  assert.equal(validServerDir('/opt'), true)
   assert.equal(validServerDir('/opt/a-b/c_d.1'), true)
   assert.equal(validServerDir('/opt/../etc'), false)
   assert.equal(validServerDir('/opt/a;rm -rf'), false)
   assert.equal(validServerDir('relative'), false)
+  assert.equal(validServerDir('/'), false)
+  assert.equal(validServerDir('//opt'), false)
+  assert.equal(validServerDir('/opt/'), false)
   assert.equal(validServerDir(''), false)
 })
 

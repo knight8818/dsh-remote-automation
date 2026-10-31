@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const home = mkdtempSync(join(tmpdir(), 'dsh-ra-tasks-'))
 process.env.DSH_HOME = home
@@ -29,6 +29,11 @@ test('buildTaskScript quotes the server directory and embeds the command', () =>
   assert.ok(script.includes('\necho hello\n'))
   assert.ok(script.includes(`echo $$ > ${shellQuote('/opt/automation')}/state/t-1a2b3c4d.pid`))
   assert.ok(script.includes('echo "[$(date -Is)] EXIT $rc"'))
+})
+
+test('buildTaskScript wraps the command in a subshell to keep the exit code', () => {
+  const script = buildTaskScript(sampleTask({ command: 'exit 3' }), '/opt/automation')
+  assert.ok(script.includes('\n(\nexit 3\n)\nrc=$?\n'))
 })
 
 test('buildTaskScript sanitizes the task name in the START marker', () => {
@@ -65,6 +70,21 @@ test('loadState drops malformed rows and normalizes schedules', () => {
   )
   assert.equal(tasks[1].schedule, null)
   assert.equal('target' in loadState(), false)
+})
+
+test('newTask records its server directory and rejects bad ones', () => {
+  const task = newTask({ name: 'x', command: 'echo x', schedule: null, serverDir: '/srv/tasks' })
+  assert.equal(task.serverDir, '/srv/tasks')
+  const unsafe = newTask({ name: 'x', command: 'echo x', schedule: null, serverDir: '/srv/../etc' })
+  assert.equal(unsafe.serverDir, null)
+})
+
+test('loadState backs up a corrupt state file instead of losing tasks', () => {
+  writeFileSync(statePath(), '{ this is not json')
+  const { tasks } = loadState()
+  assert.deepEqual(tasks, [])
+  const backups = readdirSync(dirname(statePath())).filter((name) => name.startsWith('state.json.bad-'))
+  assert.ok(backups.length >= 1)
 })
 
 test('saveState round-trips and persists only tasks', () => {

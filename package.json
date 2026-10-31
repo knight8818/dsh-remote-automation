@@ -33,6 +33,7 @@
     "cloud-assistant"
   ],
   "license": "MIT",
+  "author": "dsh-remote-automation contributors",
   "engines": {
     "node": ">=20",
     "dsh": ">=0.2.0-0"

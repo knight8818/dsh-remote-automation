@@ -31,15 +31,10 @@ Repository: <https://github.com/knight8818/dsh-remote-automation>
 - If exactly one profile exists, use it. If several exist, use `desktop` when it exists,
   otherwise ask the user which profile they run.
 
-Check whether the plugin is already installed:
-
-```bash
-dsh plugin --profile <name> why dsh-remote-automation
-```
-
-or inspect the profile's `package.json` `dsh.profile.bundles` for `dsh-remote-automation`
-(boolean check only). If present and the user wants an update, use `update` (below); do not
-append a second layer.
+Check whether the plugin is already installed by reading the profile's `package.json` and
+looking for `dsh-remote-automation` in `dsh.profile.bundles` (boolean check only). If it is
+already there, do **not** add a second layer: re-run the `add` command below to update the
+checkout, or tell the user it is already installed.
 
 ## 2. Install (preferred, one command)
 
@@ -127,11 +122,12 @@ and provide them through a safe channel (never paste secrets into chat logs).
 ## 6. Update
 
 ```bash
-dsh plugin --profile <name> update dsh-remote-automation
+dsh plugin --profile <name> add github:knight8818/dsh-remote-automation
 ```
 
-or `add` the same spec again if the CLI version has no `update`. After updating, re-run the
-verification in section 4 and ask for a restart if the host half changed.
+`dsh plugin` forwards to pnpm, so running `add` again updates the existing dependency; the
+bundle layer is already in `dsh.profile.bundles` and is not duplicated. After updating,
+re-run the verification in section 4 and ask for a restart if the host half changed.
 
 ## 7. Uninstall
 
