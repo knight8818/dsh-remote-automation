@@ -3,14 +3,16 @@
 This file is written for a coding agent (DeepSeek, or any DSH agent) that has been asked to
 install, update, verify or remove this plugin. Follow it literally. The plugin is a **DSH
 bundle**: a package with `dsh.bundle.patch`, a host half (`lib/host.js`), a prebuilt browser
-half (`lib/client.js`) and a bundle layer (`cordis.patch.yml`).
+half (`lib/client.js`) and a bundle layer (`cordis.patch.yml`). It supports Aliyun ECS
+(Cloud Assistant), Tencent Cloud CVM (TAT) and AWS EC2 (SSM); credentials are configured by
+the user in the page or through `DSH_RA_*` variables, never at install time.
 
 Repository: <https://github.com/knight8818/dsh-remote-automation>
 
 ## Non-negotiable rules
 
 1. **Never print, copy, diff or commit** anything under `<DSH_HOME>/remote-automation/`
-   (`config.json`, `state.json`). They contain the user's Aliyun AccessKey and their shell
+   (`config.json`, `state.json`). They contain the user's cloud credentials and their shell
    commands. If you must check existence, use a boolean, never the contents.
 2. **Never add credentials** to the repo, to `cordis.patch.yml`, to issues or to chat.
 3. **Never start, restart or kill DSH** on your own. After installing, tell the user to
@@ -111,9 +113,10 @@ Report:
 - what was installed (package name, version, profile),
 - which method was used (bundle vs manual) and the resulting line/entry,
 - that they must **fully quit DSH and relaunch** (window reload is not enough),
-- what they should see afterwards: a **Cloud Tasks** entry in the sidebar, and the
-  `automation_create` / `cloud_task_*` tools,
-- that configuration happens in the page (RAM AccessKey, region, instance ID) or through
+- what they should see afterwards: a **Cloud Tasks** entry in the sidebar, the provider
+  dropdown (Aliyun ECS / Tencent Cloud CVM / AWS EC2), and the `automation_create` /
+  `cloud_task_*` tools,
+- that configuration happens in the page (AccessKey or SecretId, region, instance ID) or through
   `DSH_RA_*` environment variables, and that secrets are stored locally only.
 
 Do not restart DSH for them. Do not configure credentials for them unless they explicitly ask
@@ -143,12 +146,14 @@ confirmation — it holds their credentials.
 ## 8. Development (only when asked to change the plugin)
 
 ```bash
-npm install     # dev-only dependency: yaml (tests)
+npm install     # test dependency yaml + Tencent TAT SDK
 npm run check   # node --check on every runtime file
 npm test        # node:test
 ```
 
-- Runtime code is dependency-free. Do not add runtime dependencies without a strong reason.
+- The Aliyun path is dependency-free. The Tencent / AWS paths use their official SDKs
+  (`tencentcloud-sdk-nodejs-tat`, `@aws-sdk/client-ssm`); do not add more runtime dependencies
+  without a strong reason.
 - `lib/client.js` is hand-written in the DSH lazy-CJS module format
   (`window.__ModuleLoader__.load({ id, factory })`); it is not built. Keep it valid with
   `node --check`.
@@ -167,3 +172,6 @@ npm test        # node:test
 | Duplicate `id: remote-automation` | Bundle plus manual layer; remove one |
 | `unauthorized` in the page | The page token was not injected; full restart |
 | `插件尚未配置` | No credentials yet; use the page or `DSH_RA_*` |
+| Tencent `AuthFailure` | The CAM sub-user is missing the three `tat:*` actions |
+| AWS `AccessDenied` | The IAM user is missing the three `ssm:*` actions |
+| Aliyun `Forbidden.RAM` | The RAM user is missing the five `ecs:*` actions |

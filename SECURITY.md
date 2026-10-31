@@ -4,7 +4,8 @@
 
 | Version | Supported |
 | --- | --- |
-| `0.2.x` | Yes |
+| `0.3.x` | Yes |
+| `0.2.x` | Security fixes only |
 | `0.1.x` | No |
 
 ## Reporting a vulnerability
@@ -26,13 +27,17 @@ report. Redact them.
 - The repository and its git history contain **no credentials**. Configuration is read from
   `DSH_RA_*` environment variables or `$DSH_HOME/remote-automation/config.json` at runtime.
 - The config file is written with mode `0600` on platforms that support POSIX permissions.
+  Aliyun AccessKey and Tencent SecretId/SecretKey pairs are stored there per provider.
 - The local HTTP surface (`/dsh-remote-automation/*`) requires a random per-process token
   injected into the authenticated DSH page; token comparison is constant-time.
-- The page never receives the AccessKey secret; only a masked ID is returned.
-- Remote execution uses Aliyun Cloud Assistant over outbound HTTPS. The plugin never opens an
-  inbound port and never stores an SSH key.
+- The page never receives AccessKey secrets or Tencent SecretKey; only masked IDs are returned.
+- Remote execution uses Aliyun Cloud Assistant, Tencent TAT or AWS SSM over outbound HTTPS.
+  The plugin never opens an inbound port and never stores an SSH key.
 - Task state (`state.json`) contains the shell commands the user asked to run. Treat it like
   shell history and protect the file accordingly.
+- The Tencent path uses the official `tencentcloud-sdk-nodejs-tat` package from npm, the AWS
+  path uses `@aws-sdk/client-ssm`; the Aliyun path implements the signed request locally with
+  Node's standard library.
 - No telemetry is collected or sent.
 
 ## Scope
@@ -41,5 +46,6 @@ In scope: command injection through task names, schedules, region, instance ID o
 directory; authentication bypass of the local HTTP routes; secret disclosure through the API,
 logs or error messages; path traversal in server-side file operations.
 
-Out of scope: an attacker who already controls the local machine or the user's Aliyun account;
-misconfiguration of the instance's security group; vulnerabilities in Aliyun's service itself.
+Out of scope: an attacker who already controls the local machine or the user's cloud account;
+misconfiguration of the instance's security group; vulnerabilities in Aliyun, Tencent or other
+cloud services themselves.

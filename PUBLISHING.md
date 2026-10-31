@@ -28,7 +28,7 @@ npm publish
 需要 2FA 时加 `--otp=123456`。发布后验证：
 
 ```bash
-npm view dsh-remote-automation version   # 0.2.0
+npm view dsh-remote-automation version   # 0.3.0
 npm view dsh-remote-automation dist.tarball
 ```
 
@@ -40,7 +40,7 @@ dsh plugin --profile desktop add dsh-remote-automation
 
 **凭证注意**：不要在仓库、README、聊天或 CI 日志里写 token。本地用 `npm login` 存系统钥匙串；
 CI 用 npm Trusted Publishing（OIDC）或仓库 Secret `NPM_TOKEN`，并加 `--provenance`。
-发布前用 `npm publish --dry-run` 检查内容，应只有 `lib/`、`cordis.patch.yml`、README、LICENSE 等 13 个文件。
+发布前用 `npm publish --dry-run` 检查内容，应只有 `lib/`、`cordis.patch.yml`、README、LICENSE 等文件（当前 17 个）。
 
 ## 2. 提交 awesome-dsh-plugin（最重要）
 
@@ -55,8 +55,8 @@ url: https://github.com/knight8818/dsh-remote-automation
 name: knight8818/dsh-remote-automation
 category: remote
 description:
-  en: Run scheduled shell automation on a remote Aliyun ECS through Cloud Assistant, with a Cloud Tasks sidebar page and agent tools.
-  zh: 在 DSH 侧栏管理云端定时任务：通过阿里云云助手在 ECS 上执行脚本，零入站端口，并提供 Agent 工具。
+  en: Run scheduled shell automation on remote Aliyun ECS, Tencent Cloud CVM or AWS EC2 instances through zero-inbound command channels, with a Cloud Tasks sidebar page and agent tools.
+  zh: 在 DSH 侧栏管理阿里云 / 腾讯云 / AWS 上的定时任务：通过零入站命令通道执行脚本，并提供 Agent 工具。
 icon: https://raw.githubusercontent.com/knight8818/dsh-remote-automation/main/assets/icon.png
 ```
 

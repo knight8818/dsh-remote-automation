@@ -5,7 +5,14 @@ import YAML from 'yaml'
 
 import { percentEncode } from '../lib/aliyun.js'
 import { shellQuote, validCron } from '../lib/tasks.js'
-import { normalizeTaskCommand, normalizeTaskName, validRegion, validServerDir } from '../lib/validate.js'
+import { PROVIDER_IDS, providerState } from '../lib/providers.js'
+import {
+  normalizeTaskCommand,
+  normalizeTaskName,
+  validRegion,
+  validServerDir,
+  validTencentInstanceId,
+} from '../lib/validate.js'
 
 test('percentEncode follows Aliyun RPC rules', () => {
   assert.equal(percentEncode('a b'), 'a%20b')
@@ -68,12 +75,51 @@ test('validServerDir rejects traversal, root and shell metacharacters', () => {
   assert.equal(validServerDir(''), false)
 })
 
+test('validTencentInstanceId accepts CVM and Lighthouse ids', () => {
+  assert.equal(validTencentInstanceId('ins-abc12345'), true)
+  assert.equal(validTencentInstanceId('lhins-ar5wyn4x'), true)
+  assert.equal(validTencentInstanceId('i-abc123'), false)
+  assert.equal(validTencentInstanceId('ins-abc;rm'), false)
+  assert.equal(validTencentInstanceId(''), false)
+})
+
+test('provider metadata exposes all providers and masks credentials', () => {
+  assert.deepEqual(PROVIDER_IDS, ['aliyun', 'tencent', 'aws'])
+  const aliyun = providerState('aliyun', {
+    accessKeyId: 'LTAI1234567890',
+    accessKeySecret: 'secret',
+    region: 'cn-shenzhen',
+    instanceId: 'i-abc12345',
+  })
+  assert.equal(aliyun.configured, true)
+  assert.equal(aliyun.maskedId, 'LTAI****7890')
+  assert.equal(aliyun.secretConfigured, true)
+  const tencent = providerState('tencent', { secretId: 'AKIDexample1234', secretKey: 'x'.repeat(12) })
+  assert.equal(tencent.configured, false)
+  assert.ok(tencent.missing.includes('region'))
+  const aws = providerState('aws', {
+    accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    region: 'us-east-1',
+    instanceId: 'i-abc12345',
+  })
+  assert.equal(aws.configured, true)
+  const badToken = providerState('aws', {
+    accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+    secretAccessKey: 'x'.repeat(20),
+    region: 'us-east-1',
+    instanceId: 'i-abc12345',
+    sessionToken: 'short',
+  })
+  assert.equal(badToken.invalid.includes('sessionToken'), true)
+})
+
 test('task input normalization enforces limits', () => {
   assert.equal(normalizeTaskName('  daily-report  '), 'daily-report')
   assert.equal(normalizeTaskName('bad\nname'), null)
   assert.equal(normalizeTaskName('x'.repeat(81)), null)
   assert.equal(normalizeTaskCommand('  echo hi  '), 'echo hi')
-  assert.equal(normalizeTaskCommand('x'.repeat(64 * 1024 + 1)), null)
+  assert.equal(normalizeTaskCommand('x'.repeat(12 * 1024 + 1)), null)
 })
 
 test('the package is an installable DSH bundle', () => {

@@ -8,7 +8,7 @@ const home = mkdtempSync(join(tmpdir(), 'dsh-ra-tasks-'))
 process.env.DSH_HOME = home
 mkdirSync(join(home, 'remote-automation'), { recursive: true })
 
-const { buildTaskScript, loadState, newTask, saveState, shellQuote } = await import('../lib/tasks.js')
+const { buildTaskScript, loadState, newTask, saveState, shellQuote, taskDir, taskStatuses } = await import('../lib/tasks.js')
 const { statePath } = await import('../lib/config.js')
 
 function sampleTask(overrides = {}) {
@@ -17,6 +17,7 @@ function sampleTask(overrides = {}) {
     name: 'daily-report',
     command: 'echo hello',
     schedule: '0 9 * * *',
+    provider: 'aliyun',
     createdAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   }
@@ -58,6 +59,8 @@ test('loadState drops malformed rows and normalizes schedules', () => {
         sampleTask({ id: 'not-a-task' }),
         sampleTask({ id: 't-00000000', command: '' }),
         sampleTask({ id: 't-11111111', schedule: '0 9 * * *; curl evil' }),
+        sampleTask({ id: 't-33333333', provider: 'tencent' }),
+        sampleTask({ id: 't-44444444', provider: 'not-a-cloud' }),
         { id: 't-22222222', name: 42, command: 'echo x' },
         null,
       ],
@@ -66,17 +69,59 @@ test('loadState drops malformed rows and normalizes schedules', () => {
   const { tasks } = loadState()
   assert.deepEqual(
     tasks.map((task) => task.id),
-    ['t-1a2b3c4d', 't-11111111'],
+    ['t-1a2b3c4d', 't-11111111', 't-33333333', 't-44444444'],
   )
   assert.equal(tasks[1].schedule, null)
+  assert.equal(tasks[2].provider, 'tencent')
+  assert.equal(tasks[3].provider, 'aliyun')
   assert.equal('target' in loadState(), false)
 })
 
-test('newTask records its server directory and rejects bad ones', () => {
-  const task = newTask({ name: 'x', command: 'echo x', schedule: null, serverDir: '/srv/tasks' })
+test('newTask records provider and server directory, rejecting bad values', () => {
+  const task = newTask({ name: 'x', command: 'echo x', schedule: null, provider: 'tencent', serverDir: '/srv/tasks' })
+  assert.equal(task.provider, 'tencent')
   assert.equal(task.serverDir, '/srv/tasks')
+  const fallback = newTask({ name: 'x', command: 'echo x', schedule: null, provider: 'nope' })
+  assert.equal(fallback.provider, 'aliyun')
   const unsafe = newTask({ name: 'x', command: 'echo x', schedule: null, serverDir: '/srv/../etc' })
   assert.equal(unsafe.serverDir, null)
+})
+
+test('taskDir prefers the task directory and validates it', () => {
+  const runtime = { provider: 'aliyun', serverDir: '/opt/automation' }
+  assert.equal(taskDir(runtime, { serverDir: '/srv/one' }), '/srv/one')
+  assert.equal(taskDir(runtime, { serverDir: null }), '/opt/automation')
+  assert.throws(() => taskDir({ serverDir: '/bad/../dir' }, {}), /脚本目录不合法/)
+})
+
+test('taskStatuses groups tasks by provider and skips unconfigured ones', async () => {
+  const calls = []
+  const runtime = {
+    provider: 'aliyun',
+    serverDir: '/opt/automation',
+    providers: { aliyun: { accessKeyId: 'x' }, tencent: {} },
+    state: {
+      aliyun: { configured: true, missing: [], invalid: [] },
+      tencent: { configured: false, missing: ['secretId'], invalid: [] },
+    },
+    clientFactory: (id) => {
+      calls.push(id)
+      return {
+        async exec(script) {
+          assert.ok(script.includes('t-1a2b3c4d'))
+          return { exitCode: 0, output: 't-1a2b3c4d|1|123|0|2026-01-01 00:00:00\n' }
+        },
+      }
+    },
+  }
+  const tasks = [
+    { id: 't-1a2b3c4d', provider: 'aliyun', serverDir: '/opt/automation' },
+    { id: 't-22222222', provider: 'tencent', serverDir: '/opt/automation' },
+  ]
+  const statuses = await taskStatuses(runtime, tasks)
+  assert.deepEqual(calls, ['aliyun'])
+  assert.equal(statuses['t-1a2b3c4d'].state, 'running')
+  assert.equal(statuses['t-22222222'].state, 'unconfigured')
 })
 
 test('loadState backs up a corrupt state file instead of losing tasks', () => {
