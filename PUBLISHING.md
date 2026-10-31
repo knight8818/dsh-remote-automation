@@ -28,7 +28,7 @@ npm publish
 需要 2FA 时加 `--otp=123456`。发布后验证：
 
 ```bash
-npm view dsh-remote-automation version   # 0.3.0
+npm view dsh-remote-automation version   # 0.4.0
 npm view dsh-remote-automation dist.tarball
 ```
 
@@ -40,7 +40,7 @@ dsh plugin --profile desktop add dsh-remote-automation
 
 **凭证注意**：不要在仓库、README、聊天或 CI 日志里写 token。本地用 `npm login` 存系统钥匙串；
 CI 用 npm Trusted Publishing（OIDC）或仓库 Secret `NPM_TOKEN`，并加 `--provenance`。
-发布前用 `npm publish --dry-run` 检查内容，应只有 `lib/`、`cordis.patch.yml`、README、LICENSE 等文件（当前 17 个）。
+发布前用 `npm publish --dry-run` 检查内容，应只有 `lib/`、`cordis.patch.yml`、README、LICENSE 等文件（当前 18 个）。
 
 ## 2. 提交 awesome-dsh-plugin（最重要）
 

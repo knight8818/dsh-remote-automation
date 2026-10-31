@@ -8,7 +8,8 @@ const home = mkdtempSync(join(tmpdir(), 'dsh-ra-tasks-'))
 process.env.DSH_HOME = home
 mkdirSync(join(home, 'remote-automation'), { recursive: true })
 
-const { buildTaskScript, loadState, newTask, saveState, shellQuote, taskDir, taskStatuses } = await import('../lib/tasks.js')
+const { addTask, buildTaskScript, loadState, newTask, saveState, shellQuote, taskDir, taskStatuses } = await import('../lib/tasks.js')
+const { sha256Hex } = await import('../lib/artifact.js')
 const { statePath } = await import('../lib/config.js')
 
 function sampleTask(overrides = {}) {
@@ -47,6 +48,66 @@ test('buildTaskScript sanitizes the task name in the START marker', () => {
 test('buildTaskScript refuses an unsafe server directory', () => {
   assert.throws(() => buildTaskScript(sampleTask(), '/opt/../etc'), /脚本目录不合法/)
   assert.throws(() => buildTaskScript(sampleTask(), '/opt/a;b'), /脚本目录不合法/)
+})
+
+test('artifact tasks cd into the extracted directory', () => {
+  const task = sampleTask({
+    command: 'bash run.sh',
+    artifact: { sha256: 'a'.repeat(64), entry: 'bash run.sh', size: 12 },
+  })
+  const script = buildTaskScript(task, '/opt/automation')
+  assert.ok(script.includes("cd '/opt/automation/tasks/t-1a2b3c4d'"))
+  assert.ok(script.includes('\n(\nbash run.sh\n)\nrc=$?\n'))
+})
+
+test('addTask uploads, verifies and extracts an artifact in chunks', async () => {
+  const bytes = Buffer.from('fake tar gz bytes')
+  const sha = sha256Hex(bytes)
+  const task = newTask({
+    name: 'artifact',
+    command: 'bash run.sh',
+    provider: 'aliyun',
+    serverDir: '/opt/automation',
+    artifact: { sha256: sha, entry: 'bash run.sh', size: bytes.length },
+  })
+  const calls = []
+  const runtime = {
+    provider: 'aliyun',
+    serverDir: '/opt/automation',
+    providers: { aliyun: {} },
+    state: { aliyun: { configured: true, missing: [], invalid: [] } },
+    clientFactory: () => ({
+      chunkSize: 4,
+      async exec(command) {
+        calls.push(command)
+        if (command.includes('sha256sum')) return { exitCode: 0, output: `${sha}\n` }
+        return { exitCode: 0, output: 'ok\n' }
+      },
+    }),
+  }
+  await addTask(runtime, task, { artifactBytes: bytes })
+  assert.ok(calls.some((command) => command.includes('chunk-00000')))
+  assert.ok(calls.some((command) => command.includes('tar -xzf')))
+  assert.ok(calls.some((command) => command.includes('printf') && command.includes(`${task.id}.sh`)))
+})
+
+test('newTask keeps valid artifact metadata only', () => {
+  const good = newTask({
+    name: 'x',
+    command: 'bash run.sh',
+    provider: 'aliyun',
+    serverDir: '/opt/automation',
+    artifact: { sha256: 'b'.repeat(64), entry: 'bash run.sh', size: 10 },
+  })
+  assert.equal(good.artifact.entry, 'bash run.sh')
+  const bad = newTask({
+    name: 'x',
+    command: 'bash run.sh',
+    provider: 'aliyun',
+    serverDir: '/opt/automation',
+    artifact: { sha256: 'not-a-hash', entry: 'bash run.sh' },
+  })
+  assert.equal(bad.artifact, null)
 })
 
 test('loadState drops malformed rows and normalizes schedules', () => {

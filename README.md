@@ -170,7 +170,9 @@ Windows 下路径是 `%USERPROFILE%\.dsh\profiles\node_modules\` 和 `%USERPROFI
         "ecs:DescribeInvocationResults",
         "ecs:DescribeCloudAssistantStatus",
         "ecs:DescribeInstances",
-        "ecs:InstallCloudAssistant"
+        "ecs:InstallCloudAssistant",
+        "ecs:SendFile",
+        "ecs:DescribeSendFileResults"
       ],
       "Resource": "*"
     }
@@ -178,7 +180,7 @@ Windows 下路径是 `%USERPROFILE%\.dsh\profiles\node_modules\` 和 `%USERPROFI
 }
 ```
 
-它不能删实例、改安全组、动磁盘或网络。
+`ecs:SendFile` / `ecs:DescribeSendFileResults` 用于把脚本/小制品直接下发到实例；没有这两个权限时会自动退回 RunCommand 内联/分块，不影响大文件部署。它不能删实例、改安全组、动磁盘或网络。
 
 ### 腾讯云 CAM 最小权限
 
@@ -240,11 +242,36 @@ Windows 下路径是 `%USERPROFILE%\.dsh\profiles\node_modules\` 和 `%USERPROFI
 
 | 工具 | 作用 |
 | --- | --- |
-| `automation_create` | 创建自动化任务的唯一入口，先问云端/本地，使用当前选中的云厂商 |
+| `automation_create` | 创建自动化任务的唯一入口，先问云端/本地，使用当前选中的云厂商；支持 `command` 内联或 `sourcePath` 制品 |
 | `cloud_task_list` | 列出所有厂商的任务和实时状态（每个厂商一次查询） |
 | `cloud_task_run` | 立即触发（自动使用任务所属厂商） |
 | `cloud_task_logs` | 查看日志尾部 |
 | `cloud_task_delete` | 删除脚本、cron 和日志 |
+
+### 部署方式：内联 vs 制品
+
+`automation_create` 支持两种方式：
+
+| 方式 | 参数 | 适合 |
+| --- | --- | --- |
+| 内联 | `command` | 单条命令/小脚本，≤ 12 KB |
+| 制品 | `sourcePath` + `entry` | 整个目录、多文件项目 |
+
+制品流程：
+
+1. 本地把文件/目录打成 `tar.gz`，计算 `sha256`；
+2. **阿里云且制品 ≤ 24 KB**：用 `SendFile` 原生下发（需 `ecs:SendFile`）；没有权限或超过 24 KB 时自动退回分块；
+3. 分块上传：阿里云 8 KB/块、腾讯云 28 KB/块、AWS 48 KB/块，4 路并发，最后 `sha256` 校验、解压到 `<脚本目录>/tasks/<任务id>/`；
+4. 任务脚本 `cd` 到该目录执行 `entry`；
+5. cron 之后只跑本地已解压文件，**不再需要网络下载**。
+
+```text
+把本地 C:\work\etl 部署成每天 2 点的云端任务，入口 bash run.sh
+```
+
+Agent 会调用 `automation_create({ name, sourcePath, entry, schedule })`。
+
+限制：制品硬上限 20 MB；超过 2 MB 建议改用 OSS/COS/S3。整个方案**不需要新账号、不需要 Tailscale、不需要对象存储**，只走你已有的云助手通道；阿里云 `SendFile` 是可选的加速项。
 
 ### 状态是怎么判断的
 
@@ -265,6 +292,7 @@ Windows 下路径是 `%USERPROFILE%\.dsh\profiles\node_modules\` 和 `%USERPROFI
 - 页面只拿到打码的 AccessKey ID / SecretId；Secret 不回传、不写日志、不渲染。
 - 命令通过云厂商的零入站通道（Cloud Assistant / TAT）下发，实例上没有新增监听端口。
 - 腾讯云通道使用官方 `tencentcloud-sdk-nodejs-tat` SDK，AWS 通道使用官方 `@aws-sdk/client-ssm`；阿里云通道仍是纯标准库 HMAC-SHA1 实现。
+- 制品分块只包含已打包的 tar.gz 数据，路径和任务 id 都经过校验；部署完会删除服务器上的临时压缩包。
 - `state.json` 会保存你要求执行的命令，请当作 shell history 对待；写入权限 `0600`。
 - 插件不上报任何遥测。
 
@@ -283,6 +311,8 @@ Windows 下路径是 `%USERPROFILE%\.dsh\profiles\node_modules\` 和 `%USERPROFI
 | 云助手离线 | 在实例上启动/安装云助手 agent |
 | TAT 自动化助手离线 | 在 CVM 上安装并启动 `tat_agent`（公共镜像默认有） |
 | SSM Agent 离线 | 在 EC2 上安装并启动 `amazon-ssm-agent`，并确认实例角色允许 SSM |
+| `ClientNeedUpgrade` | 云助手/TAT Agent 版本太旧；升级后会自动使用 SendFile/文件下发，否则退回内联 |
+| 制品上传很慢 | 压缩后仍大于 2 MB 时建议改用 OSS/COS/S3；分块是给中小项目用的 |
 | `id: remote-automation` 出现两次 | 同时用了 bundle 和手动 patch，删掉其中一个 |
 | 刚点「运行」日志是空的 | 进程刚启动，过几秒刷新 |
 
@@ -297,7 +327,7 @@ dsh plugin --profile desktop remove dsh-remote-automation
 ## 开发
 
 ```bash
-npm install          # 测试依赖 yaml + 腾讯云 TAT SDK
+npm install          # 测试依赖 yaml + 腾讯云/AWS SDK + tar
 npm run check        # 对所有运行时文件执行 node --check
 npm test             # node:test
 ```
@@ -312,7 +342,8 @@ lib/clients.js    云厂商客户端工厂
 lib/aliyun.js     阿里云 ECS 云助手 RPC 客户端（HMAC-SHA1，零 SDK）
 lib/tencent.js    腾讯云 TAT 客户端（官方 SDK，RunCommand 轮询）
 lib/aws.js        AWS SSM 客户端（官方 SDK，SendCommand 轮询）
-lib/tasks.js      任务模型 + 远端脚本/cron/日志/状态操作
+lib/artifact.js   制品打包（tar.gz）、sha256、分块
+lib/tasks.js      任务模型 + 制品上传/解压 + 远端脚本/cron/日志/状态操作
 lib/config.js     配置读取、v1→v2 迁移与打码
 lib/validate.js   配置、任务、HTTP 共用的输入校验
 cordis.patch.yml  bundle layer（插入插件行）

@@ -35,6 +35,8 @@ report. Redact them.
   The plugin never opens an inbound port and never stores an SSH key.
 - Task state (`state.json`) contains the shell commands the user asked to run. Treat it like
   shell history and protect the file accordingly.
+- Artifact chunks contain only the packed tar.gz; the temporary archive is removed after
+  extraction, and the task directory is scoped by the generated task id.
 - The Tencent path uses the official `tencentcloud-sdk-nodejs-tat` package from npm, the AWS
   path uses `@aws-sdk/client-ssm`; the Aliyun path implements the signed request locally with
   Node's standard library.

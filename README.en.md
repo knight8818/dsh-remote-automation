@@ -172,13 +172,17 @@ Create a custom policy with exactly these actions and attach it to the RAM user:
         "ecs:DescribeInvocationResults",
         "ecs:DescribeCloudAssistantStatus",
         "ecs:DescribeInstances",
-        "ecs:InstallCloudAssistant"
+        "ecs:InstallCloudAssistant",
+        "ecs:SendFile",
+        "ecs:DescribeSendFileResults"
       ],
       "Resource": "*"
     }
   ]
 }
 ```
+
+`ecs:SendFile` / `ecs:DescribeSendFileResults` let the plugin deliver scripts and small artifacts directly; without them it falls back to RunCommand inline/chunked transfer.
 
 ### Tencent Cloud CAM policy (least privilege)
 
@@ -238,11 +242,36 @@ Tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `automation_create` | The only creation entry point; asks cloud vs local first, uses the active provider |
+| `automation_create` | The only creation entry point; asks cloud vs local first, uses the active provider, supports `command` or `sourcePath` |
 | `cloud_task_list` | List tasks across providers with live status |
 | `cloud_task_run` | Trigger a task now (uses the task's provider) |
 | `cloud_task_logs` | Tail the task log |
 | `cloud_task_delete` | Remove script, cron entry and log |
+
+### Deployment: inline vs artifact
+
+`automation_create` accepts two modes:
+
+| Mode | Parameters | Best for |
+| --- | --- | --- |
+| Inline | `command` | One command / small script, ≤ 12 KB |
+| Artifact | `sourcePath` + `entry` | Whole directory / multi-file project |
+
+Artifact flow:
+
+1. Pack the local file/directory into `tar.gz` and compute `sha256`.
+2. **Aliyun and artifact ≤ 24 KB**: native `SendFile` (needs `ecs:SendFile`); otherwise fall back to chunked transfer.
+3. Chunked upload: Aliyun 8 KB, Tencent 28 KB, AWS 48 KB per chunk, 4 concurrent writers, then `sha256` verification and extraction to `<serverDir>/tasks/<taskId>/`.
+4. The runner script `cd`s into that directory and executes `entry`.
+5. Cron runs the extracted local files; no network download after deployment.
+
+```text
+Deploy C:\work\etl as a cloud task every day at 02:00, entry bash run.sh
+```
+
+The agent calls `automation_create({ name, sourcePath, entry, schedule })`.
+
+Hard limit: 20 MB. Above 2 MB, prefer OSS/COS/S3. No new account, no Tailscale, no object storage is required; the optional `SendFile` simply removes one encoding layer for Aliyun small files.
 
 ### How status is determined
 
@@ -263,6 +292,7 @@ Each refresh runs a read-only script on the target instance:
 - The page receives a masked AccessKey ID / SecretId only. Secrets are never returned, logged or rendered.
 - Commands run through Cloud Assistant, TAT or SSM; there is no inbound listener on the instance.
 - The Tencent path uses `tencentcloud-sdk-nodejs-tat`, the AWS path uses `@aws-sdk/client-ssm`; the Aliyun path is standard-library HMAC-SHA1 only.
+- Artifact chunks contain only the packed tar.gz; paths and task ids are validated, and the temporary archive is removed after extraction.
 - Task state (`state.json`) stores the commands you asked to run, so treat it like shell history; it is written `0600`.
 - The plugin sends no telemetry.
 
@@ -281,6 +311,8 @@ See [`SECURITY.md`](SECURITY.md) for reporting a vulnerability.
 | Cloud Assistant offline | Start/install the Cloud Assistant agent on the instance |
 | TAT agent offline | Install/start `tat_agent` on the CVM (public images include it) |
 | SSM Agent offline | Install/start `amazon-ssm-agent` on EC2; the instance role must allow SSM |
+| `ClientNeedUpgrade` | The Cloud Assistant / TAT agent is too old; upgrade it to use SendFile, otherwise the plugin falls back |
+| Artifact upload is slow | Above ~2 MB compressed, prefer OSS/COS/S3; chunking targets small and medium projects |
 | `id: remote-automation` appears twice | You installed both the bundle and the manual patch — remove one |
 | Logs are empty right after "Run" | The process just started; refresh in a few seconds |
 
@@ -295,7 +327,7 @@ For a manual install, delete `~/.dsh/profiles/node_modules/dsh-remote-automation
 ## Development
 
 ```bash
-npm install          # test dependency yaml + Tencent TAT SDK
+npm install          # test dependency yaml + Tencent/AWS SDKs + tar
 npm run check        # node --check on every runtime file
 npm test             # node:test
 ```
@@ -310,7 +342,8 @@ lib/clients.js    provider client factory
 lib/aliyun.js     Aliyun Cloud Assistant RPC client (HMAC-SHA1, no SDK)
 lib/tencent.js    Tencent TAT client (official SDK, RunCommand polling)
 lib/aws.js        AWS SSM client (official SDK, SendCommand polling)
-lib/tasks.js      task model + remote script/cron/log/status operations
+lib/artifact.js   artifact packing (tar.gz), sha256, chunking
+lib/tasks.js      task model + artifact upload/extract + remote script/cron/log/status
 lib/config.js     config resolution, v1→v2 migration, masking
 lib/validate.js   input validation shared by config, tasks and HTTP
 cordis.patch.yml  bundle layer (inserts the plugin row)

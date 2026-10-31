@@ -146,14 +146,16 @@ confirmation — it holds their credentials.
 ## 8. Development (only when asked to change the plugin)
 
 ```bash
-npm install     # test dependency yaml + Tencent TAT SDK
+npm install     # test dependency yaml + Tencent/AWS SDKs + tar
 npm run check   # node --check on every runtime file
 npm test        # node:test
 ```
 
-- The Aliyun path is dependency-free. The Tencent / AWS paths use their official SDKs
-  (`tencentcloud-sdk-nodejs-tat`, `@aws-sdk/client-ssm`); do not add more runtime dependencies
-  without a strong reason.
+- `automation_create` supports inline `command` or `sourcePath` + `entry`. For a directory
+  project, pack it locally (tar.gz), upload in chunks, verify sha256, extract and run; cron
+  then runs the extracted files without network access.
+- The Aliyun path can use `ecs:SendFile` for small files (≤ 24 KB raw); it falls back to
+  chunked RunCommand automatically when the permission or agent version is missing.
 - `lib/client.js` is hand-written in the DSH lazy-CJS module format
   (`window.__ModuleLoader__.load({ id, factory })`); it is not built. Keep it valid with
   `node --check`.
@@ -174,4 +176,4 @@ npm test        # node:test
 | `插件尚未配置` | No credentials yet; use the page or `DSH_RA_*` |
 | Tencent `AuthFailure` | The CAM sub-user is missing the three `tat:*` actions |
 | AWS `AccessDenied` | The IAM user is missing the three `ssm:*` actions |
-| Aliyun `Forbidden.RAM` | The RAM user is missing the five `ecs:*` actions |
+| Aliyun `Forbidden.RAM` | The RAM user is missing the seven `ecs:*` actions (including SendFile) |

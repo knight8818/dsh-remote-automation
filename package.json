@@ -1,6 +1,6 @@
 {
   "name": "dsh-remote-automation",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A DeepSeek Harness (DSH) plugin that runs scheduled shell automation on remote Aliyun ECS, Tencent Cloud CVM or AWS EC2 instances through zero-inbound command channels, with a Cloud Tasks sidebar page and agent tools.",
   "type": "module",
   "main": "lib/host.js",
@@ -51,7 +51,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check lib/host.js && node --check lib/client.js && node --check lib/aliyun.js && node --check lib/tencent.js && node --check lib/aws.js && node --check lib/clients.js && node --check lib/providers.js && node --check lib/tasks.js && node --check lib/config.js && node --check lib/validate.js"
+    "check": "node --check lib/host.js && node --check lib/client.js && node --check lib/aliyun.js && node --check lib/tencent.js && node --check lib/aws.js && node --check lib/artifact.js && node --check lib/clients.js && node --check lib/providers.js && node --check lib/tasks.js && node --check lib/config.js && node --check lib/validate.js"
   },
   "dsh": {
     "bundle": {
@@ -82,6 +82,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-ssm": "^3.1161.0",
+    "tar": "^7.5.22",
     "tencentcloud-sdk-nodejs-tat": "^4.1.241"
   }
 }
